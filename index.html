@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ポーカーゲーム</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #2c3e50;
+            color: white;
+            text-align: center;
+        }
+
+        .player-area {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .player {
+            margin: 0 20px;
+            padding: 20px;
+            background-color: #34495e;
+            border-radius: 50%;
+            width: 150px;
+            height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .player-name {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        .chips {
+            font-size: 16px;
+        }
+
+        #pot {
+            margin-top: 20px;
+            font-size: 24px;
+            background-color: #e74c3c;
+            padding: 10px;
+            border-radius: 10px;
+            display: inline-block;
+        }
+
+        .action-buttons {
+            margin-top: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            background-color: #2980b9;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #3498db;
+        }
+
+        #next-player {
+            font-size: 20px;
+            margin-top: 30px;
+        }
+
+        .winner-screen {
+            display: none;
+        }
+
+        .winner-screen h2 {
+            font-size: 36px;
+            color: #2ecc71;
+        }
+
+        .winner-screen button {
+            background-color: #27ae60;
+        }
+
+        .card {
+            font-size: 24px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ポーカーゲーム</h1>
+    
+    <div id="game-screen">
+        <!-- プレイヤー表示エリア -->
+        <div class="player-area" id="players"></div>
+        
+        <!-- ポット -->
+        <div id="pot">ポット: 0コイン</div>
+
+        <!-- 行動ボタン -->
+        <div class="action-buttons">
+            <button onclick="bet()">BET</button>
+            <button onclick="call()">CALL</button>
+            <button onclick="fold()">FOLD</button>
+            <button onclick="check()" id="check-button">CHECK</button>
+        </div>
+
+        <!-- 次のプレイヤー -->
+        <div id="next-player"></div>
+    </div>
+
+    <!-- 勝利画面 -->
+    <div id="winner-screen" class="winner-screen">
+        <h2>勝者: <span id="winner-name"></span></h2>
+        <p id="winner-chips"></p>
+        <button onclick="restartGame()">再対局</button>
+    </div>
+
+    <script>
+        const players = [];
+        let currentPlayerIndex = 0;
+        let pot = 0;
+
+        function addPlayer(name, chips) {
+            players.push({ name: name, chips: chips, cards: [], isFolded: false });
+        }
+
+        function setupGame() {
+            // プレイヤーを配置
+            const playerArea = document.getElementById('players');
+            playerArea.innerHTML = '';
+            players.forEach(player => {
+                const playerDiv = document.createElement('div');
+                playerDiv.classList.add('player');
+                playerDiv.innerHTML = `
+                    <div class="player-name">${player.name}</div>
+                    <div class="chips">${player.chips}コイン</div>
+                `;
+                playerArea.appendChild(playerDiv);
+            });
+            startPlayerTurn();
+        }
+
+        function startPlayerTurn() {
+            const player = players[currentPlayerIndex];
+            document.getElementById('next-player').innerText = `「${player.name}」に端末を渡してください。`;
+        }
+
+        function bet() {
+            const player = players[currentPlayerIndex];
+            const betAmount = prompt("いくらBETしますか？");
+            const amount = parseInt(betAmount, 10);
+
+            if (amount > player.chips) {
+                alert("オールインします！");
+                pot += player.chips;
+                player.chips = 0;
+            } else {
+                pot += amount;
+                player.chips -= amount;
+            }
+
+            updatePot();
+            nextPlayer();
+        }
+
+        function call() {
+            // CALL ロジック
+            nextPlayer();
+        }
+
+        function fold() {
+            players[currentPlayerIndex].isFolded = true;
+            nextPlayer();
+        }
+
+        function check() {
+            // CHECK ロジック
+            nextPlayer();
+        }
+
+        function nextPlayer() {
+            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            startPlayerTurn();
+        }
+
+        function updatePot() {
+            document.getElementById('pot').innerText = `ポット: ${pot}コイン`;
+        }
+
+        function restartGame() {
+            pot = 0;
+            currentPlayerIndex = 0;
+            setupGame();
+        }
+
+        // デモプレイヤー追加
+        addPlayer("Player1", 1000);
+        addPlayer("Player2", 1000);
+        addPlayer("Player3", 1000);
+
+        setupGame();
+    </script>
+
+</body>
+</html>
