@@ -12,32 +12,43 @@
             text-align: center;
         }
 
+        #player-form {
+            margin-bottom: 20px;
+        }
+
         .player-area {
-            display: flex;
-            justify-content: center;
-            margin-top: 20px;
+            position: relative;
+            width: 500px;
+            height: 500px;
+            margin: 0 auto;
+            border-radius: 50%;
+            border: 2px solid white;
         }
 
         .player {
-            margin: 0 20px;
-            padding: 20px;
+            position: absolute;
+            width: 100px;
+            height: 100px;
             background-color: #34495e;
             border-radius: 50%;
-            width: 150px;
-            height: 150px;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
+            color: white;
         }
 
         .player-name {
-            font-size: 20px;
-            margin-bottom: 10px;
+            font-size: 14px;
         }
 
         .chips {
-            font-size: 16px;
+            font-size: 12px;
+        }
+
+        #dealer-cards {
+            margin: 20px 0;
+            font-size: 24px;
         }
 
         #pot {
@@ -68,6 +79,12 @@
             background-color: #3498db;
         }
 
+        input[type="number"] {
+            padding: 10px;
+            font-size: 16px;
+            margin: 10px;
+        }
+
         #next-player {
             font-size: 20px;
             margin-top: 30px;
@@ -85,39 +102,51 @@
         .winner-screen button {
             background-color: #27ae60;
         }
-
-        .card {
-            font-size: 24px;
-        }
     </style>
 </head>
 <body>
 
     <h1>ポーカーゲーム</h1>
-    
-    <div id="game-screen">
-        <!-- プレイヤー表示エリア -->
-        <div class="player-area" id="players"></div>
-        
-        <!-- ポット -->
-        <div id="pot">ポット: 0コイン</div>
 
-        <!-- 行動ボタン -->
-        <div class="action-buttons">
-            <button onclick="bet()">BET</button>
-            <button onclick="call()">CALL</button>
-            <button onclick="fold()">FOLD</button>
-            <button onclick="check()" id="check-button">CHECK</button>
-        </div>
-
-        <!-- 次のプレイヤー -->
-        <div id="next-player"></div>
+    <!-- プレイヤー追加フォーム -->
+    <div id="player-form">
+        <label for="player-name">プレイヤー名を入力してください：</label>
+        <input type="text" id="player-name">
+        <button onclick="addPlayer()">追加</button>
+        <button onclick="startGame()">ゲーム開始</button>
+        <button onclick="removePlayer()">削除</button>
     </div>
+
+    <!-- プレイヤー表示エリア -->
+    <div class="player-area" id="players"></div>
+
+    <!-- ディーラーがめくったカード -->
+    <div id="dealer-cards">ディーラーのカード: </div>
+
+    <!-- ポット -->
+    <div id="pot">ポット: 0コイン</div>
+
+    <!-- BETフィールド -->
+    <div>
+        <input type="number" id="bet-amount" placeholder="ベット額を入力">
+    </div>
+
+    <!-- 行動ボタン -->
+    <div class="action-buttons">
+        <button onclick="bet()">BET</button>
+        <button onclick="call()">CALL</button>
+        <button onclick="fold()">FOLD</button>
+        <button onclick="check()" id="check-button">CHECK</button>
+    </div>
+
+    <!-- 次のプレイヤー -->
+    <div id="next-player"></div>
 
     <!-- 勝利画面 -->
     <div id="winner-screen" class="winner-screen">
         <h2>勝者: <span id="winner-name"></span></h2>
         <p id="winner-chips"></p>
+        <div id="all-hands"></div>
         <button onclick="restartGame()">再対局</button>
     </div>
 
@@ -125,52 +154,132 @@
         const players = [];
         let currentPlayerIndex = 0;
         let pot = 0;
+        let tableCards = [];
+        let round = 1; // ラウンドトラッキング（1巡目はカード2枚）
+        let isGameStarted = false;
+        let previousBet = 0; // 前のプレイヤーのベット額を保持
 
-        function addPlayer(name, chips) {
-            players.push({ name: name, chips: chips, cards: [], isFolded: false });
+        function addPlayer() {
+            if (players.length >= 8) {
+                alert("プレイヤーは8人までです。");
+                return;
+            }
+
+            const name = document.getElementById("player-name").value;
+            if (name) {
+                players.push({ name: name, chips: 1000, cards: [], isFolded: false });
+                document.getElementById("player-name").value = '';
+                updatePlayersUI();
+            }
         }
 
-        function setupGame() {
-            // プレイヤーを配置
+        function removePlayer() {
+            const name = document.getElementById("player-name").value;
+            const index = players.findIndex(player => player.name === name);
+            if (index > -1) {
+                players.splice(index, 1);
+                document.getElementById("player-name").value = '';
+                updatePlayersUI();
+            }
+        }
+
+        function updatePlayersUI() {
             const playerArea = document.getElementById('players');
             playerArea.innerHTML = '';
-            players.forEach(player => {
+            const n = players.length;
+            const centerX = 250;
+            const centerY = 250;
+            const radius = 200;
+            
+            players.forEach((player, index) => {
+                const angle = (index * (360 / n)) * (Math.PI / 180);
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                
                 const playerDiv = document.createElement('div');
                 playerDiv.classList.add('player');
+                playerDiv.style.left = `${x - 50}px`; // 中心からのずれを調整
+                playerDiv.style.top = `${y - 50}px`;  // 中心からのずれを調整
                 playerDiv.innerHTML = `
                     <div class="player-name">${player.name}</div>
-                    <div class="chips">${player.chips}コイン</div>
+                    <div class="chips" id="chips-${player.name}">${player.chips}コイン</div>
                 `;
                 playerArea.appendChild(playerDiv);
             });
+        }
+
+        function startGame() {
+            if (players.length < 3) {
+                alert("プレイヤーは3人以上必要です。");
+                return;
+            }
+            isGameStarted = true;
+            document.getElementById('player-form').style.display = 'none';
+            dealInitialCards();
             startPlayerTurn();
+        }
+
+        function dealInitialCards() {
+            // ディーラーが最初に2枚カードをめくる
+            tableCards = ['♠️A', '♦️K']; // カード例（本来はランダムに生成）
+            document.getElementById('dealer-cards').innerText = `ディーラーのカード: ${tableCards.join(', ')}`;
         }
 
         function startPlayerTurn() {
             const player = players[currentPlayerIndex];
-            document.getElementById('next-player').innerText = `「${player.name}」に端末を渡してください。`;
+            if (player.isFolded || player.chips === 0) {
+                nextPlayer();
+                return;
+            }
+            document.getElementById('next-player').innerText = `${player.name}のターンです。`;
+            checkBettingConditions();
+        }
+
+        function checkBettingConditions() {
+            const player = players[currentPlayerIndex];
+            const canCheck = previousBet === 0;
+            document.getElementById('check-button').disabled = !canCheck;
         }
 
         function bet() {
             const player = players[currentPlayerIndex];
-            const betAmount = prompt("いくらBETしますか？");
-            const amount = parseInt(betAmount, 10);
+            const betInput = document.getElementById('bet-amount');
+            const betAmount = parseInt(betInput.value, 10);
 
-            if (amount > player.chips) {
-                alert("オールインします！");
-                pot += player.chips;
-                player.chips = 0;
-            } else {
-                pot += amount;
-                player.chips -= amount;
+            if (isNaN(betAmount) || betAmount <= 0) {
+                alert("有効なベット額を入力してください。");
+                return;
             }
 
+            if (betAmount >= player.chips) {
+                alert("オールインします！");
+                pot += player.chips;
+                previousBet = player.chips;
+                player.chips = 0;
+            } else {
+                pot += betAmount;
+                previousBet = betAmount;
+                player.chips -= betAmount;
+            }
+
+            updatePlayerChips(player);
             updatePot();
             nextPlayer();
         }
 
         function call() {
-            // CALL ロジック
+            const player = players[currentPlayerIndex];
+
+            if (previousBet > player.chips) {
+                pot += player.chips;
+                player.chips = 0;
+            } else {
+                pot += previousBet;
+                player.chips -= previousBet;
+            }
+
+            updatePlayerChips(player);
+            updatePot();
             nextPlayer();
         }
 
@@ -180,13 +289,23 @@
         }
 
         function check() {
-            // CHECK ロジック
             nextPlayer();
+            if (round > 1) {
+                tableCards.push('♥️10'); // 新しいカードをめくる
+                document.getElementById('dealer-cards').innerText = `ディーラーのカード: ${tableCards.join(', ')}`;
+            }
         }
 
         function nextPlayer() {
-            currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            do {
+                currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+            } while (players[currentPlayerIndex].isFolded || players[currentPlayerIndex].chips === 0);
+
             startPlayerTurn();
+        }
+
+        function updatePlayerChips(player) {
+            document.getElementById(`chips-${player.name}`).innerText = `${player.chips}コイン`;
         }
 
         function updatePot() {
@@ -196,15 +315,13 @@
         function restartGame() {
             pot = 0;
             currentPlayerIndex = 0;
-            setupGame();
+            round = 1;
+            isGameStarted = false;
+            previousBet = 0;
+            document.getElementById('player-form').style.display = 'block';
+            document.getElementById('winner-screen').style.display = 'none';
+            updatePlayersUI();
         }
-
-        // デモプレイヤー追加
-        addPlayer("Player1", 1000);
-        addPlayer("Player2", 1000);
-        addPlayer("Player3", 1000);
-
-        setupGame();
     </script>
 
 </body>
