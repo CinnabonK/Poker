@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ポーカーゲーム</title>
+    <title>テキサス・ホールデム</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -16,15 +16,10 @@
             margin-bottom: 20px;
         }
 
-        .player-list {
-            margin-bottom: 20px;
-            color: white;
-        }
-
         .player-area {
             position: relative;
-            width: 500px;
-            height: 500px;
+            width: 600px;
+            height: 600px;
             margin: 0 auto;
             border-radius: 50%;
             border: 2px solid white;
@@ -41,6 +36,10 @@
             justify-content: center;
             align-items: center;
             color: white;
+        }
+
+        .player.current {
+            background-color: #e74c3c;
         }
 
         .player-name {
@@ -84,10 +83,8 @@
             background-color: #3498db;
         }
 
-        input[type="number"] {
-            padding: 10px;
-            font-size: 16px;
-            margin: 10px;
+        input[type="range"] {
+            width: 300px;
         }
 
         #next-player {
@@ -108,42 +105,43 @@
             background-color: #27ae60;
         }
 
-        /* シーン切り替え用のスタイル */
-        #card-check-scene, #poker-table-scene, #lobby-scene {
+        #card-check-scene, #poker-table-scene {
             display: none;
         }
 
-        /* ロビーでのプレイヤー表示 */
-        #lobby-player-list {
-            color: white;
+        .player-list {
+            margin-bottom: 20px;
+        }
+
+        .player-list ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        .player-list li {
+            font-size: 18px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
 
-    <h1>ポーカーゲーム</h1>
+    <h1>テキサス・ホールデム</h1>
 
-    <!-- ロビーシーン -->
-    <div id="lobby-scene">
-        <!-- プレイヤー追加フォーム -->
-        <div id="player-form">
-            <label for="player-name">プレイヤー名を入力してください：</label>
-            <input type="text" id="player-name">
-            <button onclick="addPlayer()">追加</button>
-            <button onclick="startGame()">ゲーム開始</button>
-            <button onclick="removePlayer()">削除</button>
-        </div>
-
-        <!-- プレイヤーリスト -->
-        <div id="lobby-player-list"></div>
+    <!-- プレイヤー追加フォーム -->
+    <div id="player-form">
+        <label for="player-name">プレイヤー名を入力してください：</label>
+        <input type="text" id="player-name">
+        <button onclick="addPlayer()">追加</button>
+        <button onclick="startGame()">ゲーム開始</button>
+        <button onclick="removePlayer()">削除</button>
     </div>
 
-    <!-- 手札確認シーン -->
-    <div id="card-check-scene">
-        <div id="pass-message">次のプレイヤー名さんに端末を渡してください</div>
-        <button onclick="showCards()">OK</button>
-        <div id="player-cards" style="display: none;"></div>
-        <button onclick="nextPlayerForCardCheck()" id="memorized-button" style="display: none;">覚えた</button>
+    <!-- プレイヤーリスト -->
+    <div class="player-list">
+        <ul id="player-names">
+            <!-- プレイヤー名を表示 -->
+        </ul>
     </div>
 
     <!-- ポーカーテーブルシーン -->
@@ -157,9 +155,10 @@
         <!-- ポット -->
         <div id="pot">ポット: 0コイン</div>
 
-        <!-- BETフィールド -->
+        <!-- BETスライダー -->
         <div>
-            <input type="number" id="bet-amount" placeholder="ベット額を入力">
+            <input type="range" id="bet-amount-slider" min="1" max="1000" value="1" oninput="updateBetAmount()">
+            <span id="bet-amount-display">1</span>コイン
         </div>
 
         <!-- 行動ボタン -->
@@ -180,7 +179,7 @@
         <p id="winner-chips"></p>
         <p id="winner-hand"></p>
         <div id="all-hands"></div>
-        <button onclick="returnToLobby()">ロビーに戻る</button>
+        <button onclick="restartGame()">再対局</button>
     </div>
 
     <script>
@@ -188,22 +187,22 @@
         let currentPlayerIndex = 0;
         let pot = 0;
         let tableCards = [];
-        let round = 1; // ラウンドトラッキング（1巡目はカード2枚）
-        let isGameStarted = false;
-        let previousBet = 0; // 前のプレイヤーのベット額を保持
-        let activePlayers = []; // 現在アクティブなプレイヤー
+        let previousBet = 0;
+        let activePlayers = [];
+        let allChecked = false;
 
         function addPlayer() {
-            if (players.length >= 8) {
-                alert("プレイヤーは8人までです。");
+            if (players.length >= 10) {
+                alert("プレイヤーは10人までです。");
                 return;
             }
 
             const name = document.getElementById("player-name").value;
             if (name) {
-                players.push({ name: name, chips: 1000, cards: [], isFolded: false });
+                players.push({ name: name, chips: 1000, cards: [], isFolded: false, hasChecked: false });
                 document.getElementById("player-name").value = '';
-                updateLobbyPlayerList();
+                updatePlayersUI();
+                updatePlayerList();
             }
         }
 
@@ -213,90 +212,65 @@
             if (index > -1) {
                 players.splice(index, 1);
                 document.getElementById("player-name").value = '';
-                updateLobbyPlayerList();
+                updatePlayersUI();
+                updatePlayerList();
             }
         }
 
-        function updateLobbyPlayerList() {
-            const playerList = document.getElementById('lobby-player-list');
-            playerList.innerHTML = "<h3>参加者リスト:</h3>";
+        function updatePlayerList() {
+            const playerList = document.getElementById("player-names");
+            playerList.innerHTML = '';
             players.forEach(player => {
-                playerList.innerHTML += `<p>${player.name}</p>`;
+                const li = document.createElement("li");
+                li.textContent = player.name;
+                playerList.appendChild(li);
+            });
+        }
+
+        function updatePlayersUI() {
+            const playerArea = document.getElementById('players');
+            playerArea.innerHTML = '';
+            const n = players.length;
+            const centerX = 300;
+            const centerY = 300;
+            const radius = 250;
+            
+            players.forEach((player, index) => {
+                const angle = (index * (360 / n)) * (Math.PI / 180);
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+                
+                const playerDiv = document.createElement('div');
+                playerDiv.classList.add('player');
+                if (index === currentPlayerIndex) {
+                    playerDiv.classList.add('current');
+                }
+                playerDiv.style.left = `${x - 50}px`; 
+                playerDiv.style.top = `${y - 50}px`;  
+                playerDiv.innerHTML = `
+                    <div class="player-name">${player.name}</div>
+                    <div class="chips" id="chips-${player.name}">${player.chips}コイン</div>
+                `;
+                playerArea.appendChild(playerDiv);
             });
         }
 
         function startGame() {
-            if (players.length < 3) {
-                alert("プレイヤーは3人以上必要です。");
+            if (players.length < 2) {
+                alert("プレイヤーは2人以上必要です。");
                 return;
             }
-            isGameStarted = true;
             activePlayers = players.filter(player => player.chips > 0);
-            document.getElementById('lobby-scene').style.display = 'none';
-            showCardCheckScene();  // 手札確認シーンの表示
-        }
-
-        function showCardCheckScene() {
-            document.getElementById('card-check-scene').style.display = 'block';
-            document.getElementById('poker-table-scene').style.display = 'none';  // ポーカーテーブルを非表示
-            document.getElementById('pass-message').innerText = `${activePlayers[currentPlayerIndex].name}さんに端末を渡してください`;
-        }
-
-        function showCards() {
-            document.getElementById('player-cards').innerText = `手札: ${generateRandomCards()}`;
-            document.getElementById('player-cards').style.display = 'block';
-            document.getElementById('memorized-button').style.display = 'inline-block';  // 覚えたボタンを表示
-        }
-
-        function nextPlayerForCardCheck() {
-            document.getElementById('player-cards').style.display = 'none';
-            document.getElementById('memorized-button').style.display = 'none';
-
-            currentPlayerIndex++;
-            if (currentPlayerIndex < activePlayers.length) {
-                showCardCheckScene();
-            } else {
-                document.getElementById('card-check-scene').style.display = 'none';  // 手札確認シーンを非表示
-                document.getElementById('poker-table-scene').style.display = 'block';  // ポーカーテーブルシーンを表示
-                currentPlayerIndex = 0;  // プレイヤーターンをリセット
-                collectAnte();  // 場代徴収
-                dealInitialCards();
-                startPlayerTurn();
-            }
-        }
-
-        function collectAnte() {
-            activePlayers.forEach(player => {
-                if (player.chips < 50 && player.chips > 0) {
-                    pot += player.chips;  // ALL IN
-                    player.chips = 0;
-                } else if (player.chips >= 50) {
-                    pot += 50;
-                    player.chips -= 50;
-                }
-            });
-            updatePot();
-            updatePlayersUI();
+            document.getElementById('player-form').style.display = 'none';
+            document.getElementById('poker-table-scene').style.display = 'block';
+            dealInitialCards();
+            startPlayerTurn();
         }
 
         function dealInitialCards() {
-            // ディーラーが最初に2枚カードをめくる
-            tableCards = ['♠️A', '♦️K']; // カード例（本来はランダムに生成）
+            // ディーラーが最初に3枚カードをめくる
+            tableCards = ['♠️A', '♦️K', '♣️Q']; // カード例（本来はランダムに生成）
             document.getElementById('dealer-cards').innerText = `ディーラーのカード: ${tableCards.join(', ')}`;
-        }
-
-        function generateRandomCards() {
-            const suits = ['♠️', '♦️', '♣️', '♥️'];
-            const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-            const cards = [];
-
-            for (let i = 0; i < 2; i++) {
-                const suit = suits[Math.floor(Math.random() * suits.length)];
-                const rank = ranks[Math.floor(Math.random() * ranks.length)];
-                cards.push(`${suit}${rank}`);
-            }
-
-            return cards.join(', ');
         }
 
         function startPlayerTurn() {
@@ -306,24 +280,18 @@
                 return;
             }
             document.getElementById('next-player').innerText = `${player.name}のターンです。`;
-            checkBettingConditions();
+            document.getElementById("bet-amount-slider").max = player.chips; // スライダーの最大値をプレイヤーの所持金に設定
+            updateBetAmount();
         }
 
-        function checkBettingConditions() {
-            const player = activePlayers[currentPlayerIndex];
-            const canCheck = previousBet === 0;
-            document.getElementById('check-button').disabled = !canCheck;
+        function updateBetAmount() {
+            const sliderValue = document.getElementById("bet-amount-slider").value;
+            document.getElementById("bet-amount-display").innerText = sliderValue;
         }
 
         function bet() {
             const player = activePlayers[currentPlayerIndex];
-            const betInput = document.getElementById('bet-amount');
-            const betAmount = parseInt(betInput.value, 10);
-
-            if (isNaN(betAmount) || betAmount <= 0) {
-                alert("有効なベット額を入力してください。");
-                return;
-            }
+            const betAmount = parseInt(document.getElementById('bet-amount-slider').value, 10);
 
             if (betAmount >= player.chips) {
                 alert("オールインします！");
@@ -359,40 +327,19 @@
 
         function fold() {
             activePlayers[currentPlayerIndex].isFolded = true;
-            if (activePlayers.filter(player => !player.isFolded).length === 1) {
-                // 全員FOLDした場合、最後の残りのプレイヤーが勝者
-                declareWinner(activePlayers.find(player => !player.isFolded), "フォールドにより勝利");
-            } else {
-                nextPlayer();
-            }
-        }
-
-        function check() {
-            const remainingPlayers = activePlayers.filter(player => !player.isFolded && player.chips > 0);
-            if (remainingPlayers.every(player => player.chips === 0 || previousBet === 0)) {
-                if (tableCards.length < 5) {
-                    tableCards.push(generateRandomCards()); // 新しいカードをめくる
-                    document.getElementById('dealer-cards').innerText = `ディーラーのカード: ${tableCards.join(', ')}`;
-                } else {
-                    // 全員の手札を公開して勝者を判定する
-                    revealHandsAndDetermineWinner();
-                }
-            }
             nextPlayer();
         }
 
-        function revealHandsAndDetermineWinner() {
-            const handsContainer = document.getElementById('all-hands');
-            handsContainer.innerHTML = "<h3>全員の手札と役</h3>";
-            const hands = activePlayers.map(player => {
-                const hand = player.cards.concat(tableCards);
-                const rankedHand = rankHands(hand);
-                handsContainer.innerHTML += `<p>${player.name}: ${rankedHand.name}</p>`;
-                return { player, rankedHand };
-            });
+        function check() {
+            const player = activePlayers[currentPlayerIndex];
+            player.hasChecked = true;
 
-            const winner = hands.sort((a, b) => b.rankedHand.rank - a.rankedHand.rank)[0];
-            declareWinner(winner.player, "役による勝利");
+            // 全員がチェックしたか確認
+            if (activePlayers.every(p => p.isFolded || p.hasChecked)) {
+                revealHandsAndDecideWinner();
+            } else {
+                nextPlayer();
+            }
         }
 
         function nextPlayer() {
@@ -400,6 +347,7 @@
                 currentPlayerIndex = (currentPlayerIndex + 1) % activePlayers.length;
             } while (activePlayers[currentPlayerIndex].isFolded || activePlayers[currentPlayerIndex].chips === 0);
 
+            // 次のターンを開始
             startPlayerTurn();
         }
 
@@ -411,40 +359,44 @@
             document.getElementById('pot').innerText = `ポット: ${pot}コイン`;
         }
 
-        function restartGame() {
-            pot = 0;
-            currentPlayerIndex = 0;
-            round = 1;
-            isGameStarted = false;
-            previousBet = 0;
-            document.getElementById('winner-screen').style.display = 'none';
-            document.getElementById('lobby-scene').style.display = 'block';
-            updatePlayersUI();
+        function revealHandsAndDecideWinner() {
+            const handsContainer = document.getElementById('all-hands');
+            handsContainer.innerHTML = '';
+            let winner = null;
+            let highestRank = -1;
+
+            activePlayers.forEach(player => {
+                if (!player.isFolded) {
+                    const hand = player.cards.concat(tableCards);
+                    const rankedHand = rankHands(hand);
+                    handsContainer.innerHTML += `<p>${player.name}の手札: ${hand.join(', ')} (${rankedHand.name})</p>`;
+                    if (rankedHand.rank > highestRank) {
+                        highestRank = rankedHand.rank;
+                        winner = player;
+                    }
+                }
+            });
+
+            declareWinner(winner);
         }
 
-        function returnToLobby() {
-            restartGame();
-        }
-
-        function declareWinner(winner, reason) {
-            const hand = winner.cards.concat(tableCards); // プレイヤーの手札と場のカードを合わせる
-            const rankedHand = rankHands(hand); // 役判定を実行
-            document.getElementById('winner-name').innerText = `${winner.name} (${reason})`;
+        function declareWinner(winner) {
+            const hand = winner.cards.concat(tableCards);
+            const rankedHand = rankHands(hand);
+            document.getElementById('winner-name').innerText = winner.name;
             document.getElementById('winner-chips').innerText = `獲得チップ: ${pot}`;
             document.getElementById('winner-hand').innerText = `役: ${rankedHand.name}`;
             document.getElementById('winner-screen').style.display = 'block';
         }
 
-        // 役判定関数（ロイヤルフラッシュ、ストレートフラッシュ等を含む）
         function rankHands(cards) {
             const hand = cards.map(card => {
                 const value = card.slice(1);
                 return { suit: card[0], value: isNaN(value) ? convertFaceCard(value) : parseInt(value, 10) };
             });
 
-            hand.sort((a, b) => b.value - a.value); // 値でソート
+            hand.sort((a, b) => b.value - a.value);
 
-            // 役判定ロジック
             if (isRoyalFlush(hand)) return { name: 'ロイヤルフラッシュ', rank: 9 };
             if (isStraightFlush(hand)) return { name: 'ストレートフラッシュ', rank: 8 };
             if (isFourOfAKind(hand)) return { name: 'フォーカード', rank: 7 };
@@ -487,33 +439,6 @@
 
         function isStraightFlush(hand) {
             return isFlush(hand) && isStraight(hand);
-        }
-
-        function isFourOfAKind(hand) {
-            const values = hand.map(card => card.value);
-            return values.filter(val => values.filter(v => v === val).length === 4).length === 4;
-        }
-
-        function isFullHouse(hand) {
-            const values = hand.map(card => card.value);
-            const three = values.filter(val => values.filter(v => v === val).length === 3).length === 3;
-            const two = values.filter(val => values.filter(v => v === val).length === 2).length === 2;
-            return three && two;
-        }
-
-        function isThreeOfAKind(hand) {
-            const values = hand.map(card => card.value);
-            return values.filter(val => values.filter(v => v === val).length === 3).length === 3;
-        }
-
-        function isTwoPair(hand) {
-            const values = hand.map(card => card.value);
-            return values.filter(val => values.filter(v => v === val).length === 2).length === 4;
-        }
-
-        function isOnePair(hand) {
-            const values = hand.map(card => card.value);
-            return values.filter(val => values.filter(v => v === val).length === 2).length === 2;
         }
     </script>
 
