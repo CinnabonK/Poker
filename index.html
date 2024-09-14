@@ -183,6 +183,28 @@
         let bigBlind = 20; // ビッグブラインドの設定
         let smallBlind = 10; // スモールブラインドの設定
 
+        // トランプカードのデッキ（重複を避けるため）
+        let deck = [];
+
+        // カードデッキの初期化
+        function initializeDeck() {
+            const suits = ['♠️', '♦️', '♣️', '♥️'];
+            const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+            deck = [];
+
+            suits.forEach(suit => {
+                ranks.forEach(rank => {
+                    deck.push(`${suit}${rank}`);
+                });
+            });
+        }
+
+        // デッキからランダムなカードを引く（重複を避ける）
+        function drawCard() {
+            const randomIndex = Math.floor(Math.random() * deck.length);
+            return deck.splice(randomIndex, 1)[0];
+        }
+
         function addPlayer() {
             if (players.length >= 10) {
                 alert("プレイヤーは10人までです。");
@@ -240,7 +262,15 @@
             isGameStarted = true;
             activePlayers = players.filter(player => player.chips > 0);
             document.getElementById('player-form').style.display = 'none';
+            initializeDeck();  // デッキを初期化
+            dealCardsToPlayers();  // 各プレイヤーにカードを配る
             showCardCheckScene();  // 手札確認シーンの表示
+        }
+
+        function dealCardsToPlayers() {
+            activePlayers.forEach(player => {
+                player.cards = [drawCard(), drawCard()];
+            });
         }
 
         function showCardCheckScene() {
@@ -250,7 +280,8 @@
         }
 
         function showCards() {
-            document.getElementById('player-cards').innerText = `手札: ${generateRandomCards()}`;
+            const player = activePlayers[currentPlayerIndex];
+            document.getElementById('player-cards').innerText = `手札: ${player.cards.join(', ')}`;
             document.getElementById('player-cards').style.display = 'block';
             document.getElementById('memorized-button').style.display = 'inline-block';  // 覚えたボタンを表示
         }
@@ -266,29 +297,15 @@
                 document.getElementById('card-check-scene').style.display = 'none';  // 手札確認シーンを非表示
                 document.getElementById('poker-table-scene').style.display = 'block';  // ポーカーテーブルシーンを表示
                 currentPlayerIndex = 0;  // プレイヤーターンをリセット
-                dealInitialCards();
+                dealInitialTableCards();
                 startPlayerTurn();
             }
         }
 
-        function dealInitialCards() {
-            // ディーラーが最初に2枚カードをめくる
-            tableCards = ['♠️A', '♦️K']; // カード例（本来はランダムに生成）
+        function dealInitialTableCards() {
+            // ディーラーが最初に3枚カードをめくる（フロップ）
+            tableCards = [drawCard(), drawCard(), drawCard()];
             document.getElementById('dealer-cards').innerText = `ディーラーのカード: ${tableCards.join(', ')}`;
-        }
-
-        function generateRandomCards() {
-            const suits = ['♠️', '♦️', '♣️', '♥️'];
-            const ranks = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-            const cards = [];
-
-            for (let i = 0; i < 2; i++) {
-                const suit = suits[Math.floor(Math.random() * suits.length)];
-                const rank = ranks[Math.floor(Math.random() * ranks.length)];
-                cards.push(`${suit}${rank}`);
-            }
-
-            return cards.join(', ');
         }
 
         function startPlayerTurn() {
@@ -365,7 +382,7 @@
             if (activePlayers.every(player => player.isFolded || player.chips === 0 || previousBet === 0)) {
                 // 全員がチェックした場合、新しいカードを追加
                 if (tableCards.length < 5) {
-                    tableCards.push(generateRandomCards()); // 新しいカードをめくる
+                    tableCards.push(drawCard()); // 新しいカードをめくる
                     document.getElementById('dealer-cards').innerText = `ディーラーのカード: ${tableCards.join(', ')}`;
                 } else {
                     // 全員がチェックし、5枚のカードが出ている場合、ショーダウンを実施
